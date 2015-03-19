@@ -20,10 +20,14 @@ end
 
 
 module Mallory
-  def self.use_recording name
-    filename = "fixtures/mallory_recordings/#{name}.yaml"
-    if File.exist? filename
-      Responses.saved_responses = YAML.load_file filename
+  def self.recording_path(name)
+    "fixtures/#{name}.yaml"
+  end
+
+  def self.load_recording(name)
+    path = recording_path(name)
+    if File.exist? path
+      Responses.saved_responses = YAML.load_file path
     else
       Responses.saved_responses = {}
     end
@@ -31,10 +35,55 @@ module Mallory
   end
 
   def self.save_recording name
-    filename = "fixtures/mallory_recordings/#{name}.yaml"
+    path = recording_path(name)
     if Responses.saved_responses_changed
-      File.write(filename, Responses.saved_responses.to_yaml)
+      if !File.exist? path
+        FileUtils.mkdir_p(File.dirname(path))
+      end
+      File.write(path, Responses.saved_responses.to_yaml)
       Responses.saved_responses_changed = false
+    end
+  end
+
+  def self.configure
+    yield configuration
+  end
+
+  def self.configuration
+    @configuration ||= Configuration.new
+  end
+
+  class Configuration
+    def configure_rspec
+      ::RSpec.configure do |config|
+        recording_name_for = lambda do |metadata|
+          if metadata.has_key? :parent_example_group
+            recording_name_for[metadata[:parent_example_group]] +
+              metadata[:description]
+          elsif metadata.has_key? :example_group
+            recording_name_for[metadata[:example_group]] +
+              metadata[:description]
+          else
+            Pathname.new(metadata[:description])
+          end
+        end
+
+        config.before(:each, mallory: lambda { |v| !!v }) do |example|
+          options = example.metadata[:mallory]
+          options = options.is_a?(Hash) ? options.dup : {}
+          recording_name = options.delete(:recording_name) ||
+                           recording_name_for[example.metadata]
+          Mallory.load_recording(recording_name)
+        end
+
+        config.after(:each, mallory: lambda { |v| !!v }) do |example|
+          options = example.metadata[:mallory]
+          options = options.is_a?(Hash) ? options.dup : {}
+          recording_name = options.delete(:recording_name) ||
+                           recording_name_for[example.metadata]
+          Mallory.save_recording recording_name
+        end
+      end
     end
   end
 
@@ -49,7 +98,12 @@ module Mallory
       @real_connection ||= Net::SSH.start_without_mallory(@host, @user)
     end
 
+    def session_commands
+      @session_commands ||= []
+    end
+
     def exec!(command)
+      session_commands << command
       if @responses.has_response? command
         @responses[command]
       else
