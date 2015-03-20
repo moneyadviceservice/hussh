@@ -47,6 +47,10 @@ module Mallory
   end
 
   class Configuration
+    def recordings_directory(directory)
+      Mallory::Responses.recordings_directory = directory
+    end
+
     def configure_rspec
       ::RSpec.configure do |config|
         recording_name_for = lambda do |metadata|
@@ -109,9 +113,14 @@ module Mallory
   class Responses
     @@recording = {}
     @@recording_changed = false
+    @@recordings_directory = 'fixtures/mallory'
+
+    def self.recordings_directory=(directory)
+      @@recordings_directory = directory
+    end
 
     def self.recording_path(name)
-      "fixtures/#{name}.yaml"
+      "#{@@recordings_directory}/#{name}.yaml"
     end
 
     def self.recording
