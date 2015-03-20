@@ -5,11 +5,13 @@ module Net
   module SSH
     class << self
       def start_with_mallory(host, user, options = {}, &block)
-        session = Mallory::Session.new(host, user)
-        if block_given?
-          yield session
-        else
-          session
+        if Mallory::Responses.has_recording? || Mallory.allow_connections?
+          session = Mallory::Session.new(host, user)
+          if block_given?
+            yield session
+          else
+            session
+          end
         end
       end
       alias_method :start_without_mallory, :start
@@ -20,29 +22,16 @@ end
 
 
 module Mallory
-  def self.recording_path(name)
-    "fixtures/#{name}.yaml"
+  def self.allow_connections?
+    @allow_connections ||= false
   end
 
-  def self.load_recording(name)
-    path = recording_path(name)
-    if File.exist? path
-      Responses.saved_responses = YAML.load_file path
-    else
-      Responses.saved_responses = {}
-    end
-    Responses.saved_responses_changed = false
+  def self.allow_connections
+    @allow_connections = true
   end
 
-  def self.save_recording name
-    path = recording_path(name)
-    if Responses.saved_responses_changed
-      if !File.exist? path
-        FileUtils.mkdir_p(File.dirname(path))
-      end
-      File.write(path, Responses.saved_responses.to_yaml)
-      Responses.saved_responses_changed = false
-    end
+  def self.disallow_connections
+    @allow_connections = false
   end
 
   def self.configure
@@ -73,7 +62,7 @@ module Mallory
           options = options.is_a?(Hash) ? options.dup : {}
           recording_name = options.delete(:recording_name) ||
                            recording_name_for[example.metadata]
-          Mallory.load_recording(recording_name)
+          Responses.load_recording(recording_name)
         end
 
         config.after(:each, mallory: lambda { |v| !!v }) do |example|
@@ -81,7 +70,8 @@ module Mallory
           options = options.is_a?(Hash) ? options.dup : {}
           recording_name = options.delete(:recording_name) ||
                            recording_name_for[example.metadata]
-          Mallory.save_recording recording_name
+          Responses.save_recording recording_name
+          Responses.recording.clear
         end
       end
     end
@@ -107,66 +97,92 @@ module Mallory
       if @responses.has_response? command
         @responses[command]
       else
-        Responses.saved_responses_changed = true
+        Responses.recording_changed = true
         response = real_connection.exec! command
-        Responses.saved_responses[@host][@user][command] = response
+        Responses.recording[@host][@user][command] = response
       end
     end
   end
 
 
   class Responses
-    @@saved_responses = {}
-    @@saved_responses_changed = false
+    @@recording = {}
+    @@recording_changed = false
 
-    def self.saved_responses
-      @@saved_responses
+    def self.recording_path(name)
+      "fixtures/#{name}.yaml"
     end
 
-    def self.saved_responses=(responses)
-      @@saved_responses = responses
+    def self.recording
+      @@recording
     end
 
-    def self.saved_responses_changed
-      @@saved_responses_changed
+    def self.recording=(responses)
+      @@recording = responses
     end
 
-    def self.saved_responses_changed=(changed)
-      @@saved_responses_changed = changed
+    def self.has_recording?
+      !!@@recording
+    end
+
+    def self.recording_changed?
+      @@recording_changed
+    end
+
+    def self.recording_changed=(new_value)
+      @@recording_changed = new_value
     end
 
     def self.responses_for_host_and_user(host, user)
-      @@saved_responses[host] ||= {}
-      @@saved_responses[host][user] ||= {}
-      Responses.new(host, user)
+      @@recording[host] ||= {}
+      @@recording[host][user] ||= {}
+      Recording.new(host, user)
     end
 
     def self.register_response(host, user, command, response = nil, &block)
-      @@saved_responses[host] ||= {}
-      @@saved_responses[host][user] ||= {}
-      @@saved_responses[host][user][command] = block_given? ? block : response
+      @@recording[host] ||= {}
+      @@recording[host][user] ||= {}
+      @@recording[host][user][command] = block_given? ? block : response
+    end
+
+    def self.load_recording(name)
+      path = recording_path(name)
+      if File.exist? path
+        self.recording = YAML.load_file path
+      else
+        self.recording = {}
+      end
+      self.recording_changed = false
+    end
+
+    def self.save_recording name
+      path = recording_path(name)
+      if self.recording_changed?
+        if !File.exist? path
+          FileUtils.mkdir_p(File.dirname(path))
+        end
+        File.write(path, recording.to_yaml)
+        self.recording_changed = false
+      end
     end
 
     def initialize(host, user)
       @host = host
       @user = user
-      @test_responses = {}
+      @responses = {}
     end
 
     def has_response?(command)
-      @test_responses.has_key?(command) || \
-        @@saved_responses[@host][@user].has_key?(command)
+      @responses.has_key?(command) || \
+        @@recording[@host][@user].has_key?(command)
     end
 
     def [](command)
-      @test_responses.fetch(command, @@saved_responses[@host][@user][command])
+      @responses.fetch(command, @@recording[@host][@user][command])
     end
 
     def []=(command, value)
-      # if @responses.has_key?(command) && @responses[command].responds_to?(:call)
-      #   raise "Could not overwrite callable response #{command} for #{@user}@#{@host}"
-      # end
-      @test_responses[command] = value
+      @responses[command] = value
     end
   end
 end
