@@ -42,6 +42,10 @@ module Mallory
     @configuration ||= Configuration.new
   end
 
+  def self.commands_run
+    @@commands_run ||= []
+  end
+
   class Configuration
     def configure_rspec
       ::RSpec.configure do |config|
@@ -72,6 +76,7 @@ module Mallory
                            recording_name_for[example.metadata]
           Responses.save_recording recording_name
           Responses.recording.clear
+          Mallory.commands_run.clear
         end
       end
     end
@@ -88,12 +93,8 @@ module Mallory
       @real_connection ||= Net::SSH.start_without_mallory(@host, @user)
     end
 
-    def session_commands
-      @session_commands ||= []
-    end
-
     def exec!(command)
-      session_commands << command
+      Mallory.commands_run << command
       if @responses.has_response? command
         @responses[command]
       else
@@ -136,7 +137,7 @@ module Mallory
     def self.responses_for_host_and_user(host, user)
       @@recording[host] ||= {}
       @@recording[host][user] ||= {}
-      Recording.new(host, user)
+      Responses.new(host, user)
     end
 
     def self.register_response(host, user, command, response = nil, &block)
