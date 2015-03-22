@@ -1,5 +1,6 @@
 require 'net/ssh'
 require 'pry'
+require 'logger'
 
 module Net
   module SSH
@@ -9,6 +10,7 @@ module Net
           session = Mallory::Session.new(host, user)
           if block_given?
             yield session
+            session.close
           else
             session
           end
@@ -91,10 +93,15 @@ module Mallory
       @host = host
       @user = user
       @responses = Responses.responses_for_host_and_user(host, user)
+      @recording = Responses.recording[host][user]
     end
 
-    def real_connection
-      @real_connection ||= Net::SSH.start_without_mallory(@host, @user)
+    def real_session
+      @real_session ||= Net::SSH.start_without_mallory(@host, @user)
+    end
+
+    def responses
+      @responses
     end
 
     def exec!(command)
@@ -102,13 +109,93 @@ module Mallory
       if @responses.has_response? command
         @responses[command]
       else
+        response = real_session.exec! command
         Responses.recording_changed = true
-        response = real_connection.exec! command
-        Responses.recording[@host][@user][command] = response
+        @recording[command] = response
       end
+    end
+
+    def open_channel(&block)
+      @channel = Channel.new(self)
+      block.call(@channel)
+      @channel.close
+      @recording[@channel.command_executed] = @channel.response_data
+      Responses.recording_changed = true
+    end
+
+    def close
+      @real_session.close if @real_session
+      @real_session = nil
     end
   end
 
+  class Channel
+    def initialize(session)
+      @session = session
+      @request_pty = false
+    end
+
+    def real_channel
+      @real_channel ||= @session.real_session.open_channel
+    end
+
+    def response_data
+      @data
+    end
+
+    def command_executed
+      @command
+    end
+
+    def request_pty(&block)
+      @request_pty = true
+      @request_pty_block = block
+    end
+
+    def exec(command, &block)
+      Mallory.commands_run << @command = command
+      if block_given?
+        real_channel.exec(command) do |ch, success|
+          block.call(self, success)
+        end
+      end
+    end
+
+    def close
+      @real_channel.close if @real_channel
+    end
+
+    def on_data(&block)
+      real_channel.on_data do |ch, data|
+        @data ||= ''
+        @data += data
+        block.call(ch, data)
+      end
+    end
+
+    def on_extended_data(&block)
+      real_channel.on_extended_data do |ch, data|
+        @extended_data ||= []
+        @extended_data << data
+        block.call(ch, data)
+      end
+    end
+
+    def request_pty(&block)
+      if block_given?
+        real_channel.request_pty do |ch, success|
+          @request_pty_success = success
+          block.call(ch, success)
+        end
+      else
+        real_channel.request_pty
+      end
+    end
+
+    def on_close(&block)
+      @on_close = block
+    end
+  end
 
   class Responses
     @@recording = {}
