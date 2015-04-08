@@ -1,0 +1,44 @@
+= Hussh
+
+A mocking library for <tt>Net::SSH</tt> which allows testers to specify
+responses and record real-life responses for later use.
+
+== Installation
+
+Add this line to your application's Gemfile:
+
+    gem 'hussh'
+
+And then execute:
+
+    $ bundle
+
+Or install it yourself:
+
+    $ gem install hussh
+
+== Usage
+
+Configure Hussh for use with RSpec:
+
+    Hussh.configure do |c|
+      c.configure_rspec
+    end
+
+And then tag a group of specs with <tt>hussh</tt>:
+
+    ...
+      describe 'running ssh', :hussh do
+        ...
+      end
+    ...
+
+== Contributing
+
+1. Fork it (https://github.com/moneyadviceservice/hussh/fork)
+2. Create your feature branch (<tt>git checkout -b my-new-feature</tt>)
+3. Commit your changes (<tt>git commit -am 'Add some feature'</tt>)
+4. Push to the branch (<tt>git push origin my-new-feature</tt>)
+5. Create a new Pull Request
+
+
