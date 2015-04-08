@@ -3,13 +3,13 @@ require 'rspec/mocks'
 require 'fakefs/spec_helpers'
 require 'yaml'
 
-$: << '.'
-require 'mallory'
+# $: << '.'
+require 'hussh'
 
-RSpec.describe Mallory do
+RSpec.describe Hussh do
   include FakeFS::SpecHelpers
 
-  describe Mallory::Session do
+  describe Hussh::Session do
     describe :exec! do
       let(:real_session) do
         spy = instance_spy('Net::SSH::Connection::Session')
@@ -17,10 +17,10 @@ RSpec.describe Mallory do
         spy
       end
       before do
-        Mallory.commands_run.clear
-        Mallory.clear_recorded_responses
-        Mallory.clear_stubbed_responses
-        allow(Net::SSH).to receive(:start_without_mallory)
+        Hussh.commands_run.clear
+        Hussh.clear_recorded_responses
+        Hussh.clear_stubbed_responses
+        allow(Net::SSH).to receive(:start_without_hussh)
                             .and_return(real_session)
       end
 
@@ -34,52 +34,52 @@ RSpec.describe Mallory do
         end
 
         it 'records that the command was run' do
-          expect(Mallory.commands_run).to include('hostname')
+          expect(Hussh.commands_run).to include('hostname')
         end
 
         it 'saves the result of the command' do
-          expect(Mallory.recorded_responses['host']['user']['hostname'])
+          expect(Hussh.recorded_responses['host']['user']['hostname'])
             .to eql('hostname output')
         end
 
         it 'flags the recording as changed' do
-          expect(Mallory.recording_changed?).to eql(true)
+          expect(Hussh.recording_changed?).to eql(true)
         end
       end
 
       context 'with a command that has been run before' do
         before do
-          FileUtils.mkdir_p 'fixtures/mallory'
+          FileUtils.mkdir_p 'fixtures/hussh'
           File.write(
-            'fixtures/mallory/saved_responses.yaml',
+            'fixtures/hussh/saved_responses.yaml',
             {
               'host' => { 'user' => { 'hostname' => "subsix\n" } }
             }.to_yaml
           )
-          Mallory.load_recording('saved_responses')
+          Hussh.load_recording('saved_responses')
           Net::SSH.start('host', 'user') { |s| s.exec!('hostname') }
         end
 
         it "doesn't run the command via ssh" do
-          expect(Net::SSH).to_not have_received(:start_without_mallory)
+          expect(Net::SSH).to_not have_received(:start_without_hussh)
         end
 
         it 'records that the command was run' do
-          expect(Mallory.commands_run).to include('hostname')
+          expect(Hussh.commands_run).to include('hostname')
         end
 
         it "doesn't flags the recording as changed" do
-          expect(Mallory.recording_changed?).to eql(false)
+          expect(Hussh.recording_changed?).to eql(false)
         end
       end
     end
   end
 
-  describe Mallory::Channel do
+  describe Hussh::Channel do
     before do
-      Mallory.commands_run.clear
-      Mallory.clear_recorded_responses
-      Mallory.clear_stubbed_responses
+      Hussh.commands_run.clear
+      Hussh.clear_recorded_responses
+      Hussh.clear_stubbed_responses
     end
 
     let!(:channel) do
@@ -117,17 +117,17 @@ RSpec.describe Mallory do
       session = instance_spy('Net::SSH::Connection::Session')
       # The session here is just used to stub our channel in for the real one.
       allow(session).to receive(:open_channel).and_yield(channel)
-      allow(Net::SSH).to receive(:start_without_mallory).and_return(session)
+      allow(Net::SSH).to receive(:start_without_hussh).and_return(session)
       session
     end
 
     context 'when using an exec block' do
       before do
-        FileUtils.mkdir_p 'fixtures/mallory'
-        File.write('fixtures/mallory/saved_responses.yaml', saved_responses)
-        Mallory.load_recording('saved_responses')
+        FileUtils.mkdir_p 'fixtures/hussh'
+        File.write('fixtures/hussh/saved_responses.yaml', saved_responses)
+        Hussh.load_recording('saved_responses')
 
-        # Simulate how we would use Mallory, which sits between the
+        # Simulate how we would use Hussh, which sits between the
         # application code (the code below) and the mocked-out Net::SSH
         # code.
         Net::SSH.start('host', 'user') do |session|
@@ -153,7 +153,7 @@ RSpec.describe Mallory do
           end
 
           it 'records that the command was run' do
-            expect(Mallory.commands_run).to include('test')
+            expect(Hussh.commands_run).to include('test')
           end
 
           it 'passes command status to exec' do
@@ -173,12 +173,12 @@ RSpec.describe Mallory do
           end
 
           it 'saves the result of the command' do
-            expect(Mallory.recorded_responses['host']['user']['test'])
+            expect(Hussh.recorded_responses['host']['user']['test'])
               .to eq 'test output'
           end
 
           it 'flags the recording as changed' do
-            expect(Mallory.recording_changed?).to eql(true)
+            expect(Hussh.recording_changed?).to eql(true)
           end
         end
 

@@ -5,10 +5,10 @@ require 'logger'
 module Net
   module SSH
     class << self
-      def start_with_mallory(host, user, options = {}, &block)
+      def start_with_hussh(host, user, options = {}, &block)
         # TODO: Let's do this later once everything else is working.
-        # if Mallory.has_recording? || Mallory.allow_connections?
-        session = Mallory::Session.new(host, user)
+        # if Hussh.has_recording? || Hussh.allow_connections?
+        session = Hussh::Session.new(host, user)
         if block_given?
           yield session
           session.close
@@ -17,8 +17,8 @@ module Net
         end
         # end
       end
-      alias_method :start_without_mallory, :start
-      alias_method :start, :start_with_mallory
+      alias_method :start_without_hussh, :start
+      alias_method :start, :start_with_hussh
     end
   end
 end
@@ -39,7 +39,7 @@ EOD
   end
 end
 
-module Mallory
+module Hussh
   def self.allow_connections?
     @@allow_connections ||= false
   end
@@ -64,7 +64,7 @@ module Mallory
     @@commands_run ||= []
   end
 
-  @@recordings_directory = 'fixtures/mallory'
+  @@recordings_directory = 'fixtures/hussh'
   mattr_accessor :recordings_directory
   mattr_accessor :stubbed_responses, :recorded_responses
 
@@ -115,7 +115,7 @@ module Mallory
 
   class Configuration
     def recordings_directory(directory)
-      Mallory.recordings_directory = directory
+      Hussh.recordings_directory = directory
     end
 
     def configure_rspec
@@ -132,21 +132,21 @@ module Mallory
           end
         end
 
-        config.before(:each, mallory: lambda { |v| !!v }) do |example|
-          options = example.metadata[:mallory]
+        config.before(:each, hussh: lambda { |v| !!v }) do |example|
+          options = example.metadata[:hussh]
           options = options.is_a?(Hash) ? options.dup : {}
           recording_name = options.delete(:recording_name) ||
                            recording_name_for[example.metadata]
-          Mallory.load_recording(recording_name)
-          Mallory.clear_stubbed_responses
+          Hussh.load_recording(recording_name)
+          Hussh.clear_stubbed_responses
         end
 
-        config.after(:each, mallory: lambda { |v| !!v }) do |example|
-          options = example.metadata[:mallory]
+        config.after(:each, hussh: lambda { |v| !!v }) do |example|
+          options = example.metadata[:hussh]
           options = options.is_a?(Hash) ? options.dup : {}
-          Mallory.clear_recorded_responses
-          Mallory.clear_stubbed_responses
-          Mallory.commands_run.clear
+          Hussh.clear_recorded_responses
+          Hussh.clear_stubbed_responses
+          Hussh.commands_run.clear
         end
       end
     end
@@ -159,32 +159,32 @@ module Mallory
     end
 
     def real_session
-      @real_session ||= Net::SSH.start_without_mallory(@host, @user)
+      @real_session ||= Net::SSH.start_without_hussh(@host, @user)
     end
 
     def has_response?(command)
-      Mallory.stubbed_responses.fetch(@host, {}).fetch(@user, {})
+      Hussh.stubbed_responses.fetch(@host, {}).fetch(@user, {})
         .has_key?(command) ||
-        Mallory.recorded_responses.fetch(@host, {}).fetch(@user, {})
+        Hussh.recorded_responses.fetch(@host, {}).fetch(@user, {})
         .has_key?(command)
     end
 
     def response_for(command)
-      Mallory.stubbed_responses.fetch(@host, {}).fetch(@user, {}).fetch(
+      Hussh.stubbed_responses.fetch(@host, {}).fetch(@user, {}).fetch(
         command,
-        Mallory.recorded_responses.fetch(@host, {}).fetch(@user, {})[command]
+        Hussh.recorded_responses.fetch(@host, {}).fetch(@user, {})[command]
       )
     end
 
     def update_recording(command, response)
-      Mallory.recorded_responses[@host] ||= {}
-      Mallory.recorded_responses[@host][@user] ||= {}
-      Mallory.recorded_responses[@host][@user][command] = response
-      Mallory.recording_changed!
+      Hussh.recorded_responses[@host] ||= {}
+      Hussh.recorded_responses[@host][@user] ||= {}
+      Hussh.recorded_responses[@host][@user][command] = response
+      Hussh.recording_changed!
     end
 
     def exec!(command)
-      Mallory.commands_run << command
+      Hussh.commands_run << command
       if self.has_response?(command)
         self.response_for(command)
       else
@@ -196,7 +196,7 @@ module Mallory
     def open_channel(&block)
       @channel = Channel.new(self)
       block.call(@channel)
-      Mallory.commands_run << @channel.command
+      Hussh.commands_run << @channel.command
       if self.has_response?(@channel.command)
         if @channel.exec_block.respond_to?(:call)
           @channel.exec_block.call(@channel, true)
