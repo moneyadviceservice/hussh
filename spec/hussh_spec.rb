@@ -26,7 +26,7 @@ RSpec.describe Hussh do
 
       context 'with a command that has not been run before' do
         before do
-          Net::SSH.start('host', 'user') { |s| s.exec!('hostname') }
+          Net::SSH.start('host', 'user') { |s| @output = s.exec!('hostname') }
         end
 
         it 'runs the command via ssh' do
@@ -35,6 +35,10 @@ RSpec.describe Hussh do
 
         it 'records that the command was run' do
           expect(Hussh.commands_run).to include('hostname')
+        end
+
+        it 'returns the result of the command' do
+          expect(@output).to eql('hostname output')
         end
 
         it 'saves the result of the command' do

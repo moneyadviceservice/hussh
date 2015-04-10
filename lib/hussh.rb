@@ -190,6 +190,7 @@ module Hussh
       else
         response = real_session.exec!(command)
         self.update_recording(command, response)
+        response
       end
     end
 
