@@ -144,6 +144,7 @@ module Hussh
         config.after(:each, hussh: lambda { |v| !!v }) do |example|
           options = example.metadata[:hussh]
           options = options.is_a?(Hash) ? options.dup : {}
+          Hussh.save_recording_if_changed
           Hussh.clear_recorded_responses
           Hussh.clear_stubbed_responses
           Hussh.commands_run.clear
