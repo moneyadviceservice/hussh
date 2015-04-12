@@ -7,76 +7,6 @@ require 'hussh'
 RSpec.describe Hussh do
   include FakeFS::SpecHelpers
 
-  describe Hussh::Session do
-    describe :exec! do
-      let(:real_session) do
-        spy = instance_spy('Net::SSH::Connection::Session')
-        allow(spy).to receive(:exec!) { |c| "#{c} output" }
-        spy
-      end
-      before do
-        Hussh.commands_run.clear
-        Hussh.clear_recorded_responses
-        Hussh.clear_stubbed_responses
-        allow(Net::SSH).to receive(:start_without_hussh)
-                            .and_return(real_session)
-      end
-
-      context 'with a command that has not been run before' do
-        before do
-          Net::SSH.start('host', 'user') { |s| @output = s.exec!('hostname') }
-        end
-
-        it 'runs the command via ssh' do
-          expect(real_session).to have_received(:exec!).with('hostname')
-        end
-
-        it 'records that the command was run' do
-          expect(Hussh.commands_run).to include('hostname')
-        end
-
-        it 'returns the result of the command' do
-          expect(@output).to eql('hostname output')
-        end
-
-        it 'saves the result of the command' do
-          expect(Hussh.recorded_responses['host']['user']['hostname'])
-            .to eql('hostname output')
-        end
-
-        it 'flags the recording as changed' do
-          expect(Hussh.recording_changed?).to eql(true)
-        end
-      end
-
-      context 'with a command that has been run before' do
-        before do
-          FileUtils.mkdir_p 'fixtures/hussh'
-          File.write(
-            'fixtures/hussh/saved_responses.yaml',
-            {
-              'host' => { 'user' => { 'hostname' => "subsix\n" } }
-            }.to_yaml
-          )
-          Hussh.load_recording('saved_responses')
-          Net::SSH.start('host', 'user') { |s| s.exec!('hostname') }
-        end
-
-        it "doesn't run the command via ssh" do
-          expect(Net::SSH).to_not have_received(:start_without_hussh)
-        end
-
-        it 'records that the command was run' do
-          expect(Hussh.commands_run).to include('hostname')
-        end
-
-        it "doesn't flags the recording as changed" do
-          expect(Hussh.recording_changed?).to eql(false)
-        end
-      end
-    end
-  end
-
   describe Hussh::Channel do
     before do
       Hussh.commands_run.clear
@@ -211,58 +141,6 @@ RSpec.describe Hussh do
           it 'gives us the success status' do
             expect(@exec_success).to eql(true)
           end
-        end
-      end
-    end
-  end
-
-  describe Hussh::Configuration do
-    describe :configure_rspec do
-      before do
-        allow(Hussh).to receive(:save_recording_if_changed) do
-          @saved_responses = Hussh.recorded_responses
-        end
-        allow(Hussh).to receive(:clear_recorded_responses)
-        allow(Hussh).to receive(:clear_stubbed_responses)
-        allow(Hussh.commands_run).to receive(:clear)
-        rspec_spy = instance_spy(RSpec::Core::Configuration)
-        allow(rspec_spy).to receive(:before) { |*args, &blk| @before = blk }
-        allow(rspec_spy).to receive(:after) { |*args, &blk| @after = blk }
-        allow(RSpec).to receive(:configure).and_yield(rspec_spy)
-        Hussh.configure { |c| c.configure_rspec }
-        @example = spy(RSpec::Core::Example)
-        allow(@example).to receive(:metadata).and_return(
-                             {
-                               hussh: true,
-                               description: 'Dis Iz A Mock'
-                             })
-      end
-
-      context 'after block' do
-        before do
-          Hussh.recorded_responses = {
-            'host' => { 'user' => { 'cmd' => 'output' } }
-          }
-          @after.call(@example)
-        end
-
-        it 'saves the recorded responses' do
-          expect(Hussh).to have_received(:save_recording_if_changed)
-          expect(@saved_responses).to(
-            eq({'host' => {'user' => {'cmd' => 'output'}}})
-          )
-        end
-
-        it 'clears the recorded responses' do
-          expect(Hussh).to have_received(:clear_recorded_responses)
-        end
-
-        it 'clears stubbed responses' do
-          expect(Hussh).to have_received(:clear_stubbed_responses)
-        end
-
-        it 'clears commands run' do
-          expect(Hussh.commands_run).to have_received(:clear)
         end
       end
     end
