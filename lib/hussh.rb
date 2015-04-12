@@ -209,52 +209,33 @@ module Hussh
         end
       else
         self.real_session.open_channel do |ch|
+
+          if @channel.requested_pty?
+            ch.request_pty do |ch, success|
+              if @channel.request_pty_block.respond_to?(:call)
+                @channel.request_pty_block.call(ch, success)
+              end
+            end
+          end
+
           ch.exec(@channel.command) do |ch, success|
-            if @channel.exec_block.respond_to?(:call)
-              @channel.exec_block.call(@channel, success)
-            end
-          end
+            @channel.exec_block.call(@channel, success) if @channel.exec_block
 
-          if @channel.on_data_block.respond_to?(:call)
             ch.on_data do |ch, output|
-              @channel.on_data_block.call(@channel, output)
-              @on_data = output
-              # TODO: Move below logic into update_recording?
-              # if !@on_data
-              #   @on_data = output
-              # else
-              #   @on_data = [@on_data] if !@on_data.is_a? Array
-              #   @on_data << output
-              # end
-              self.update_recording(@channel.command, @on_data)
-            end
-          end
-
-          ch.on_extended_data do |ch, output|
-            if @channel.on_extended_data_block.respond_to?(:call)
-              @channel.on_extended_data_block.call(@channel, output)
+              if @channel.on_data_block.respond_to?(:call)
+                @channel.on_data_block.call(@channel, output)
+                @on_data = output
+                self.update_recording(@channel.command, @on_data)
+              end
             end
 
-            # TODO: We don't have a way to record this yet.
-            # if !@on_extended_data
-            #   @on_extended_data = output
-            # else
-            #   if !@on_extended_data.is_a? Array
-            #     @on_extended_data = [@on_extended_data]
-            #   end
-            #   @on_extended_data << output
-            # end
-          end
-
-          ch.request_pty do |ch, success|
-            # TODO: We need a way to record this
-            if @channel.request_pty_block.respond_to?(:call)
-              @channel.request_pty_block.call(ch, success)
+            ch.on_extended_data do |ch, output|
+              if @channel.on_extended_data_block.respond_to?(:call)
+                @channel.on_extended_data_block.call(@channel, output)
+              end
             end
-          end
 
-          # TODO: Should wait be here or should it be in the calling code?
-          ch.wait
+          end
         end
       end
     end

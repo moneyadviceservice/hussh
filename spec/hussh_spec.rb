@@ -91,7 +91,7 @@ RSpec.describe Hussh do
       # call them all with the appropriate data and values.
       allow(channel).to receive(:exec) do |cmd, &blk|
         @command = cmd
-        blk.call(channel, !@command.match(/-fail$/))
+        @exec = blk
       end
       allow(channel).to receive(:request_pty) { |&block| @request_pty = block }
       allow(channel).to receive(:on_data) { |&block| @on_data = block }
@@ -118,7 +118,10 @@ RSpec.describe Hussh do
     let!(:session) do
       session = instance_spy('Net::SSH::Connection::Session')
       # The session here is just used to stub our channel in for the real one.
-      allow(session).to receive(:open_channel).and_yield(channel)
+      allow(session).to receive(:open_channel) do |&blk|
+        blk.call(channel)
+        channel.close
+      end
       allow(Net::SSH).to receive(:start_without_hussh).and_return(session)
       session
     end
