@@ -3,6 +3,8 @@
 A mocking library for <tt>Net::SSH</tt> which allows testers to specify
 responses and record real-life responses for later use.
 
+{<img src="https://travis-ci.org/moneyadviceservice/hussh.svg?branch=master" alt="Build Status" />}[https://travis-ci.org/moneyadviceservice/hussh]
+
 == Installation
 
 Add this line to your application's Gemfile:
