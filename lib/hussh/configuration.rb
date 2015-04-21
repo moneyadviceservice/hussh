@@ -20,9 +20,18 @@ module Hussh
 
         config.before(:each, hussh: lambda { |v| !!v }) do |example|
           options = example.metadata[:hussh]
-          options = options.is_a?(Hash) ? options.dup : {}
-          recording_name = options.delete(:recording_name) ||
-                           recording_name_for[example.metadata]
+          if options.is_a?(Hash)
+            options = options.dup
+            recording_name = options.delete(:recording_name) ||
+                             recording_name_for[example.metadata]
+          elsif options.is_a?(String)
+            recording_name = options
+            options = {}
+          else
+            recording_name = recording_name_for[example.metadata]
+            options = {}
+          end
+
           Hussh.load_recording(recording_name)
           Hussh.clear_stubbed_responses
         end

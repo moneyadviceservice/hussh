@@ -29,7 +29,80 @@ RSpec.describe Hussh do
                              })
       end
 
-      context 'after block' do
+      describe 'before block' do
+        let(:recorded_responses) do
+          { 'host' => { 'user' => { 'cmd' => 'output' } } }
+        end
+
+        context 'with no params' do
+          before do
+            allow(@example).to receive(:metadata).and_return(
+                                 {
+                                   hussh: true,
+                                   description: 'some spec',
+                                   example_group: {
+                                     description: 'example group',
+                                     parent_example_group: {
+                                       description: 'parent group'
+                                     }
+                                   }
+                                 }
+                               )
+            FileUtils.mkdir_p('fixtures/hussh/parent group/example group')
+            File.write(
+              'fixtures/hussh/parent group/example group/some spec.yaml',
+              recorded_responses.to_yaml
+            )
+            @before.call(@example)
+          end
+
+          it 'loads a recording with a generated name' do
+            expect(Hussh.recorded_responses).to eq(recorded_responses)
+          end
+        end
+
+        context 'with a string param' do
+          before do
+            allow(@example).to receive(:metadata).and_return(
+                                 { hussh: 'group/spec' }
+                               )
+            FileUtils.mkdir_p('fixtures/hussh/group')
+            File.write(
+              'fixtures/hussh/group/spec.yaml',
+              recorded_responses.to_yaml
+            )
+            @before.call(@example)
+          end
+
+          it 'uses the string as the recording name' do
+            expect(Hussh.recorded_responses).to eq(recorded_responses)
+          end
+        end
+
+        context 'with a hash param' do
+          before do
+            allow(@example).to receive(:metadata).and_return(
+                                 {
+                                   hussh: {
+                                     recording_name: 'parent/spec'
+                                   }
+                                 }
+                               )
+            FileUtils.mkdir_p('fixtures/hussh/parent')
+            File.write(
+              'fixtures/hussh/parent/spec.yaml',
+              recorded_responses.to_yaml
+            )
+            @before.call(@example)
+          end
+
+          it 'gets the recording_name from the hash' do
+            expect(Hussh.recorded_responses).to eq(recorded_responses)
+          end
+        end
+      end
+
+      describe 'after block' do
         before do
           Hussh.recorded_responses = {
             'host' => { 'user' => { 'cmd' => 'output' } }
