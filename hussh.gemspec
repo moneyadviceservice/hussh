@@ -28,4 +28,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'pry', '~> 0.10'
   spec.add_development_dependency 'guard-rspec', '~> 4.5'
   spec.add_development_dependency 'net-ssh', '~> 2.9'
+  spec.add_development_dependency 'codeclimate-test-reporter'
 end
