@@ -316,4 +316,55 @@ RSpec.describe Hussh do
       end
     end
   end
+
+  describe 'using exec wthout a block' do
+    before do
+      # Use Net::SSH and our callbacks defined in the exec block.
+      Net::SSH.start('host', 'user') do |session|
+        ch = session.open_channel
+        ch.on_data          { |c, data| @data = data }
+        ch.on_extended_data { |c, data| @extended_data = data }
+        ch.exec command
+      end
+    end
+
+    let(:command) { 'exec-no-block' }
+
+    it 'runs the command via ssh' do
+      expect(real_channel).to have_received(:exec).with(command)
+    end
+
+    it 'records that the command was run' do
+      expect(Hussh.commands_run).to include(command)
+    end
+
+    it 'gives us the stdout' do
+      expect(@data).to eq "#{command} output"
+    end
+
+    it 'gives us the stderr' do
+      expect(@extended_data).to eq "#{command} error output"
+    end
+
+    it 'saves the result of the command' do
+      expect(Hussh.recorded_responses['host']['user'][command])
+        .to eq "#{command} output"
+    end
+
+    it 'flags the recording as changed' do
+      expect(Hussh.recording_changed?).to eql(true)
+    end
+
+    context 'with a command that has recorded results' do
+      let(:saved_responses) do
+        {
+          'host' => { 'user' => { 'exec-no-block' => "#{command} output" } }
+        }.to_yaml
+      end
+
+      it 'gives us the stdout' do
+        expect(@data).to eq "#{command} output"
+      end
+    end
+  end
 end

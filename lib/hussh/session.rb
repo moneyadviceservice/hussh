@@ -5,10 +5,15 @@ module Hussh
     def initialize(host, user)
       @host = host
       @user = user
+      @channel_id_counter = 0
     end
 
     def real_session
       @real_session ||= Net::SSH.start_without_hussh(@host, @user)
+    end
+
+    def have_real_session?
+      !!@real_session
     end
 
     def has_response?(command)
@@ -43,54 +48,27 @@ module Hussh
       end
     end
 
+    def channels
+      @channels ||= {}
+    end
+
+    def get_next_channel_id
+      @channel_id_counter += 1
+    end
+
     def open_channel(&block)
-      @channel = Channel.new(self)
-      block.call(@channel)
-      Hussh.commands_run << @channel.command
-      if self.has_response?(@channel.command)
-        if @channel.exec_block.respond_to?(:call)
-          @channel.exec_block.call(@channel, true)
-        end
-
-        if @channel.on_data_block.respond_to?(:call)
-          @channel.on_data_block.call(@channel, self.response_for(@channel.command))
-        end
-      else
-        self.real_session.open_channel do |ch|
-
-          if @channel.requested_pty?
-            ch.request_pty do |ch, success|
-              if @channel.request_pty_block.respond_to?(:call)
-                @channel.request_pty_block.call(ch, success)
-              end
-            end
-          end
-
-          ch.exec(@channel.command) do |ch, success|
-            @channel.exec_block.call(@channel, success) if @channel.exec_block
-
-            ch.on_data do |ch, output|
-              if @channel.on_data_block.respond_to?(:call)
-                @channel.on_data_block.call(@channel, output)
-                @on_data = output
-                self.update_recording(@channel.command, @on_data)
-              end
-            end
-
-            ch.on_extended_data do |ch, output|
-              if @channel.on_extended_data_block.respond_to?(:call)
-                @channel.on_extended_data_block.call(@channel, output)
-              end
-            end
-
-          end
-        end
-      end
+      channel = Channel.new(self)
+      yield(channel) if block_given?
+      channels[get_next_channel_id] = channel
     end
 
     def close
-      @real_session.close if @real_session
-      @real_session = nil
+      channels.each do |id, channel|
+        channel.close
+      end
+      if have_real_session?
+        real_session.close
+      end
     end
   end
 end
