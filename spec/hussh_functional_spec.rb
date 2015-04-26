@@ -14,7 +14,14 @@ RSpec.describe Hussh do
     allow(channel).to receive(:exec) do |cmd, &block|
       @command = cmd
       # Allow the test to specify a command that fails.
-      @success = !cmd.match(/fail/)
+      #
+      # So ... in Ruby 1.9.3, `@command.match(/fail/)` returns nil even when it
+      # matches, inside this block to RSpec::Mocks::ExampleMethods#receive, but
+      # not outside of it. There's some deep dark voodoo going on here, so flip
+      # the Regexp and the String for now to make tests pass.
+      #
+      # See https://github.com/rspec/rspec-expectations/issues/781
+      @success = !/fail/.match(@command)
       block.call(channel, @success) if block
       output = "#{cmd} output"
       error_output = "#{cmd} error output"
